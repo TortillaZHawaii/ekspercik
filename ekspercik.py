@@ -112,7 +112,10 @@ if prompt := st.chat_input(placeholder="Podsumuj wykład w jednym zdaniu"):
     db = st.session_state["db"]
 
     retriever= db.as_retriever(
-        search_type="similarity", k=5, return_metadata=True,
+        search_type="similarity_score_threshold",
+        k=5,
+        search_kwargs={"score_threshold": 0.5},
+        return_metadata=True,
     )
 
     qa = ConversationalRetrievalChain.from_llm(
