@@ -20,6 +20,8 @@ set_debug(True)
 
 with st.sidebar:
     openai_api_key = st.text_input("OpenAI API Key", key="langchain_search_api_key_openai", type="password")
+    openai_model_name = st.text_input("OpenAI Model Name", key="langchain_search_openai_model_name", value="gpt-3.5-turbo")
+    db_prefix = st.text_input("DB Prefix", key="langchain_search_db_prefix", value="kosmetologia")
     ollama_model_name = st.text_input("Ollama Model Name", key="langchain_search_ollama_model_name", value="mistral:7b")
     "[Get an OpenAI API key](https://platform.openai.com/account/api-keys)"
     "[View the source code](https://github.com/TortillaZHawaii/ekspercik)"
@@ -33,16 +35,22 @@ is_openai = openai_api_key and len(openai_api_key) > 1
 if is_ollama:
     st.info("🤖 Używam Ollamy: " + ollama_model_name)
     persist_directory = f"./data/db_{ollama_model_name}"
+    if db_prefix:
+        persist_directory += f"_{db_prefix}"
     embeddings = OllamaEmbeddings(model=ollama_model_name)
     llm = ChatOllama(model=ollama_model_name)
-    st.session_state["db"] = Chroma(persist_directory=persist_directory, embedding_function=embeddings)
+    db = Chroma(persist_directory=persist_directory, embedding_function=embeddings)
+    st.session_state["db"] = db
 
 elif openai_api_key and len(openai_api_key) > 1:
-    st.info("🤖 Używam OpenAI: GPT-4")
+    st.info("🤖 Używam OpenAI: " + openai_model_name)
     persist_directory = f"./data/db_openai"
+    if db_prefix:
+        persist_directory += f"_{db_prefix}"
     embeddings = OpenAIEmbeddings(openai_api_key=openai_api_key, model="text-embedding-ada-002")
-    llm = ChatOpenAI(model_name="gpt-4", openai_api_key=openai_api_key, streaming=True)
-    st.session_state["db"] = Chroma(persist_directory=persist_directory, embedding_function=embeddings)
+    llm = ChatOpenAI(model_name=openai_model_name, openai_api_key=openai_api_key, streaming=True)
+    db = Chroma(persist_directory=persist_directory, embedding_function=embeddings)
+    st.session_state["db"] = db
 
 else:
     st.info("Prosze podaj nazwę modelu Ollama lub klucz OpenAPI w sidebarze, aby kontynuować")
