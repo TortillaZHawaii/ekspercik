@@ -21,4 +21,5 @@ For now you will need to guess and install all the dependencies yourself 😕.
 
 ## Screenshots
 
+![Answering question](docs/question.png)
 ![Loading pdf](docs/loading_pdf.png)
