@@ -1,5 +1,7 @@
 import streamlit as st
 
+from langchain import hub
+
 from langchain.agents import initialize_agent, AgentType
 from langchain.callbacks import StreamlitCallbackHandler
 from langchain.chat_models import ChatOllama
@@ -14,7 +16,15 @@ from langchain.embeddings import OpenAIEmbeddings
 
 from langchain.memory import ConversationBufferMemory
 from langchain.chains import ConversationalRetrievalChain
+from langchain.chains import RetrievalQAWithSourcesChain
+from langchain.chains import StuffDocumentsChain
 
+from langchain.schema import StrOutputParser
+from langchain.schema.runnable import RunnablePassthrough
+
+from langchain.globals import set_debug
+
+set_debug(True)
 
 with st.sidebar:
     openai_api_key = st.text_input("OpenAI API Key", key="langchain_search_api_key_openai", type="password")
@@ -96,15 +106,15 @@ if prompt := st.chat_input(placeholder="Podsumuj wykład w jednym zdaniu"):
 
     memory = ConversationBufferMemory(
         llm=llm,
-        memory_key="chat_history",
         return_messages=True,
         input_key='question', output_key='answer',
     )
     db = st.session_state["db"]
 
     retriever= db.as_retriever(
-        search_type="similarity", k=5, return_metadata=True
+        search_type="similarity", k=5, return_metadata=True,
     )
+
     qa = ConversationalRetrievalChain.from_llm(
         llm=llm,
         retriever=retriever,
@@ -115,15 +125,19 @@ if prompt := st.chat_input(placeholder="Podsumuj wykład w jednym zdaniu"):
     with st.chat_message("assistant"):
         st_cb = StreamlitCallbackHandler(st.container(), expand_new_thoughts=True, max_thought_containers=6)
 
-        result = qa(st.session_state.messages, callbacks=[st_cb], return_only_outputs=True)
+        chat_history = st.session_state.get("chat_history", [])
+        result = qa(
+            {"question": prompt, 'chat_history': chat_history}, callbacks=[st_cb],
+        )
 
         response = result["answer"]
         sources = result["source_documents"]
+        # https://github.com/langchain-ai/langchain/issues/2303#issuecomment-1499646042
+        # it has to be a tuple, not a list or a dict
+        chat_history.append((prompt, response))
+        st.session_state["chat_history"] = chat_history
 
-    st.session_state.messages.append({"role": "assistant", "content": result["answer"]})
-    st.chat_message("assistant").write(result["answer"])
-    st.session_state.messages.append({"role": "assistant", "content": "📚 Oto źródła:"})
-    st.chat_message("assistant").write("📚 Oto źródła:")
-    for source in sources:
-        st.chat_message("assistant").write(source)
-        st.session_state.messages.append({"role": "assistant", "content": source})
+    full_answer = result["answer"] + "\n\n" + "\n\n".join([f"📚 {source.metadata}\n\n {source.page_content}" for source in sources])
+    st.session_state.messages.append({"role": "assistant", "content": full_answer})
+    st.chat_message("assistant").write(full_answer)
+    
